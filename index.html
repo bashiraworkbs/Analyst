@@ -159,7 +159,7 @@ var SEC_ICO={wrmode:"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53M
 function sIco(k){return '<img src="'+SEC_ICO[k]+'" width="14" height="14" style="vertical-align:middle;margin-right:4px">';}
 var MODES=["Gem Grab","Brawl Ball","Heist","Bounty","Hot Zone","Knockout"];
 var MAPS=["Double Swoosh","Hard Rock Mine","Backyard Bowl","Safe Zone","Kaboom Canyon","Ring of Fire","Goldarm Gulch","Out in the Open","Super Beach","Sneaky Fields"];
-var MC={"Gem Grab":"#9b59b6","Brawl Ball":"#3498db","Heist":"#e67e22","Bounty":"#f1c40f","Hot Zone":"#e74c3c","Knockout":"#1abc9c"};
+var MC={"Gem Grab":"#9b59b6","Brawl Ball":"#3498db","Heist":"#e67e22","Bounty":"#f1c40f","Hot Zone":"#e74c3c","Knockout":"#1abc9c","Siege":"#8e44ad","Duels":"#d35400","Wipeout":"#c0392b","Showdown":"#27ae60","Solo Showdown":"#27ae60","Duo Showdown":"#16a085","Payload":"#2980b9","Basket Brawl":"#e67e22","Trophy Thieves":"#f39c12","Hunters":"#95a5a6","Bot Drop":"#7f8c8d"};
 var RANKED_MAPS={"Gem Grab":[{name:"Hard Rock Mine",id:15000007},{name:"Double Swoosh",id:15000115},{name:"Deathcap Trap",id:15000009},{name:"Undermine",id:15000008}],"Brawl Ball":[{name:"Super Beach",id:15000051},{name:"Sneaky Fields",id:15000050},{name:"Pinball Dreams",id:15000118},{name:"Pinhole Punt",id:15000026},{name:"Triple Dribble",id:15000025},{name:"Sunny Soccer",id:15000049}],"Hot Zone":[{name:"Dueling Beetles",id:15000306},{name:"Ring of Fire",id:15000300},{name:"Open Business",id:15000292},{name:"Open Zone",id:15000527}],"Heist":[{name:"Safe Zone",id:15000019},{name:"Bridge Too Far",id:15000072},{name:"Hot Potato",id:15000053},{name:"Kaboom Canyon",id:15000018},{name:"Pit Stop",id:15000137}],"Bounty":[{name:"Shooting Star",id:15000005},{name:"Layer Cake",id:15000082},{name:"Hideout",id:15000022},{name:"Dry Season",id:15000083}],"Knockout":[{name:"New Horizons",id:15000703},{name:"Belle's Rock",id:15000368},{name:"Goldarm Gulch",id:15000367},{name:"Out in the Open",id:15000548}]};
 function mapImg(id,sz){sz=sz||60;return '<img src="https://cdn.brawlify.com/maps/regular/'+id+'.png" width="'+sz+'" height="'+(sz*1.3)+'" style="border-radius:6px;object-fit:cover;background:var(--bg3)" crossorigin="anonymous" loading="lazy" onerror="this.style.display=\'none\'">';}
 function getMapId(name){for(var mk in RANKED_MAPS){for(var i=0;i<RANKED_MAPS[mk].length;i++){if(RANKED_MAPS[mk][i].name===name)return RANKED_MAPS[mk][i].id;}}return 0;}
@@ -299,16 +299,38 @@ function updateSyncBadge(){
 }
 
 function autoSetFilter(){
-  // If data is recent (within 30 days), use 30J default
-  // Otherwise default to ALL
-  var now=new Date();
-  var cut30=new Date(now.getTime()-30*86400000);
-  var recent=matchData.filter(function(r){if(!r.date)return false;return new Date(r.date)>=cut30;});
-  if(recent.length>0){
-    filters.days=30;
-  }else{
-    filters.days=9999;
-  }
+  // Date filter is relative to most recent date in data
+  // Default to ALL to show everything on first load
+  filters.days=9999;
+}
+
+function normalizeMode(v){
+  if(!v)return"";
+  var s=String(v).trim();
+  // Map common variations to standard names
+  var map={
+    "gemgrab":"Gem Grab","gem_grab":"Gem Grab","gem grab":"Gem Grab","gemGrab":"Gem Grab",
+    "brawlball":"Brawl Ball","brawl_ball":"Brawl Ball","brawl ball":"Brawl Ball","brawlBall":"Brawl Ball",
+    "heist":"Heist",
+    "bounty":"Bounty",
+    "hotzone":"Hot Zone","hot_zone":"Hot Zone","hot zone":"Hot Zone","hotZone":"Hot Zone",
+    "knockout":"Knockout","knock_out":"Knockout",
+    "siege":"Siege","loneStar":"Lone Star","takedown":"Takedown",
+    "duels":"Duels","duel":"Duels",
+    "wipeout":"Wipeout","wipe_out":"Wipeout",
+    "payload":"Payload","basketbrawl":"Basket Brawl",
+    "trophythieves":"Trophy Thieves","trophy_thieves":"Trophy Thieves",
+    "hunters":"Hunters","botdrop":"Bot Drop","bot_drop":"Bot Drop",
+    "showdown":"Showdown","soloshowdown":"Solo Showdown","duoshowdown":"Duo Showdown"
+  };
+  var lc=s.toLowerCase().replace(/[\s_-]+/g,"");
+  if(map[lc])return map[lc];
+  // Also try direct match with just lowercase
+  for(var k in map){if(k===s.toLowerCase())return map[k];}
+  // If already properly formatted (first letters caps), return as-is
+  if(/^[A-Z]/.test(s))return s;
+  // Title case it
+  return s.replace(/\w\S*/g,function(t){return t.charAt(0).toUpperCase()+t.substr(1).toLowerCase();});
 }
 
 function normalizeResult(v){
@@ -335,7 +357,7 @@ function normalizeDate(v){
 function transformRow(r){
   return {
     date:normalizeDate(r.date),
-    mode:r.mode||"",
+    mode:normalizeMode(r.mode),
     map:r.map||"",
     result:normalizeResult(r.result_team1),
     team1_name:r.team1_name||"",
@@ -464,7 +486,24 @@ function compute(data){
   return{brawlers:brawlers,comps:comps,counters:ctr,synergies:syn,modes:modes,maps:maps,timeline:timeline,total:total,wins:wins};
 }
 
-function getFD(){var d=matchData;if(filters.days&&filters.days<9999){var now=new Date();var cut=new Date(now.getTime()-filters.days*86400000);d=d.filter(function(r){if(!r.date)return true;var rd=new Date(r.date);return rd>=cut;});}if(filters.mode)d=d.filter(function(r){return r.mode===filters.mode;});return d;}
+function getFD(){
+  var d=matchData;
+  if(filters.days&&filters.days<9999){
+    // Find most recent date in data as reference (not today)
+    var maxDate=null;
+    for(var i=0;i<matchData.length;i++){
+      if(!matchData[i].date)continue;
+      var rd=new Date(matchData[i].date);
+      if(!maxDate||rd>maxDate)maxDate=rd;
+    }
+    if(maxDate){
+      var cut=new Date(maxDate.getTime()-filters.days*86400000);
+      d=d.filter(function(r){if(!r.date)return true;var rd=new Date(r.date);return rd>=cut;});
+    }
+  }
+  if(filters.mode)d=d.filter(function(r){return r.mode===filters.mode;});
+  return d;
+}
 function getDateRange(d){var dates=(d||matchData).map(function(r){return r.date;}).filter(Boolean).sort();if(!dates.length)return{from:"",to:"",label:""};var f=dates[0],t=dates[dates.length-1];function fmt(ds){var p=ds.split("-");return p[2]+"/"+p[1]+"/"+p[0];}return{from:f,to:t,label:fmt(f)+" → "+fmt(t)};}
 function setDays(n){filters.days=n;if(curPage)go(curPage);else goHome();}
 
@@ -525,11 +564,20 @@ function go(id){
 }
 
 function buildModePills(){
+  // Build mode list from MODES + any extra modes in data
+  var modeSet={};
+  for(var i=0;i<MODES.length;i++)modeSet[MODES[i]]=1;
+  for(var j=0;j<matchData.length;j++){if(matchData[j].mode)modeSet[matchData[j].mode]=1;}
+  var modeList=[];for(var mk in modeSet)modeList.push(mk);
+  // Sort: known modes first in MODES order, then extras alphabetically
+  var modeOrder={};for(var mo=0;mo<MODES.length;mo++)modeOrder[MODES[mo]]=mo;
+  modeList.sort(function(a,b){var oa=modeOrder[a]!=null?modeOrder[a]:100,ob=modeOrder[b]!=null?modeOrder[b]:100;return oa!==ob?oa-ob:a.localeCompare(b);});
+
   var h='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   h+='<div class="pills" style="margin-bottom:0">';
   h+='<div class="pill '+(filters.mode?"":"white")+'" onclick="filters.mode=\'\';go(curPage)">ALL</div>';
-  for(var i=0;i<MODES.length;i++){
-    var m=MODES[i];
+  for(var i=0;i<modeList.length;i++){
+    var m=modeList[i];
     h+='<div class="pill '+(filters.mode===m?"green":"")+'" onclick="filters.mode=\''+m+'\';go(curPage)">'+mIco(m)+m.toUpperCase()+'</div>';
   }
   h+='</div>';
@@ -615,8 +663,19 @@ function pgOverview(el,s,data){
   h+='<div class="card"><div class="card-t">WR Timeline</div><div class="chart-box"><canvas id="chTL"></canvas></div></div>';
   h+='<div class="card"><div class="card-t">WR by Mode</div><div class="chart-box"><canvas id="chM"></canvas></div></div>';
   h+='</div>';
-  h+='<div class="card"><div class="card-t">Recent Matches</div><div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Mode</th><th>Map</th><th>Your Team</th><th>Enemy</th><th>Result</th></tr></thead><tbody>';
-  for(var i=0;i<recent.length;i++){var r=recent[i];h+='<tr><td style="font-family:var(--mono);font-size:12px">'+r.date+'</td><td>'+r.mode+'</td><td style="font-size:12px">'+r.map+'</td><td style="font-size:12px">'+r.brawler1+', '+r.brawler2+', '+r.brawler3+'</td><td style="font-size:12px;color:var(--t3)">'+r.enemy1+', '+r.enemy2+', '+r.enemy3+'</td><td>'+resultBadge(r.result)+'</td></tr>';}
+  h+='<div class="card"><div class="card-t">Recent Matches</div><div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Mode</th><th>Map</th><th>Team</th><th>Your Comp</th><th>vs</th><th>Enemy Comp</th><th>Score</th><th>Result</th></tr></thead><tbody>';
+  for(var i=0;i<recent.length;i++){var r=recent[i];
+    var ot1=r.team1_name?(r.team1_name.length>12?r.team1_name.slice(0,12)+"…":r.team1_name):"";
+    var ot2=r.team2_name?(r.team2_name.length>12?r.team2_name.slice(0,12)+"…":r.team2_name):"";
+    h+='<tr><td style="font-family:var(--mono);font-size:11px">'+r.date+'</td>';
+    h+='<td style="font-size:11px">'+mIco(r.mode)+'</td>';
+    h+='<td style="font-size:11px">'+r.map+'</td>';
+    h+='<td style="font-size:10px;font-weight:600;color:var(--t2)">'+ot1+'</td>';
+    h+='<td style="font-size:11px">'+bIconSm(r.brawler1)+bIconSm(r.brawler2)+bIconSm(r.brawler3)+'</td>';
+    h+='<td style="font-size:10px;color:var(--t3)">vs</td>';
+    h+='<td style="font-size:11px">'+bIconSm(r.enemy1)+bIconSm(r.enemy2)+bIconSm(r.enemy3)+'</td>';
+    h+='<td style="font-family:var(--mono);font-size:11px;font-weight:700">'+(r.set_score||"-")+'</td>';
+    h+='<td>'+resultBadge(r.result)+'</td></tr>';}
   h+='</tbody></table></div></div></div>';
   el.innerHTML=h;
   if(s.timeline.length)mChart("chTL","line",{labels:s.timeline.map(function(d){return d.date;}),datasets:[{data:s.timeline.map(function(d){return +d.wr;}),borderColor:"#2ecc71",backgroundColor:"rgba(46,204,113,.06)",fill:true,tension:.3,pointRadius:3,pointBackgroundColor:"#2ecc71",borderWidth:2}]},{scales:{x:{ticks:{color:"#666"},grid:{color:"rgba(42,42,42,.25)"}},y:{min:0,max:100,ticks:{color:"#666"},grid:{color:"rgba(42,42,42,.25)"}}}});
@@ -1231,8 +1290,19 @@ function pgTracker(el,s,data){
   h+='<div class="kpi"><div class="kpi-label">Most Picked</div><div style="font-size:18px;font-weight:800;color:var(--yellow)">'+(mPick?mPick.name:"-")+'</div><div class="kpi-sub">'+(mPick?mPick.p:"0")+'g</div></div>';
   h+='<div class="kpi"><div class="kpi-label">Best Streak</div><div class="kpi-val" style="color:var(--green)">'+best+'</div><div class="kpi-sub">Current: '+cur+'</div></div>';
   h+='</div>';
-  h+='<div class="card"><div class="card-t">Match Log ('+recent.length+')</div><div style="max-height:450px;overflow-y:auto"><table><thead><tr><th>Date</th><th>Mode</th><th>Map</th><th>Your Comp</th><th>Enemy</th><th>Result</th></tr></thead><tbody>';
-  for(var j=0;j<recent.length;j++){var r=recent[j];h+='<tr><td style="font-family:var(--mono);font-size:12px">'+r.date+'</td><td>'+r.mode+'</td><td style="font-size:12px">'+r.map+'</td><td style="font-size:12px">'+r.brawler1+', '+r.brawler2+', '+r.brawler3+'</td><td style="font-size:12px;color:var(--t3)">'+r.enemy1+', '+r.enemy2+', '+r.enemy3+'</td><td>'+resultBadge(r.result)+'</td></tr>';}
+  h+='<div class="card"><div class="card-t">Match Log ('+recent.length+')</div><div style="max-height:450px;overflow-y:auto"><table><thead><tr><th>Date</th><th>Mode</th><th>Map</th><th>Team</th><th>Your Comp</th><th>vs</th><th>Enemy Comp</th><th>Score</th><th>Result</th></tr></thead><tbody>';
+  for(var j=0;j<recent.length;j++){var r=recent[j];
+    var t1Short=r.team1_name?(r.team1_name.length>12?r.team1_name.slice(0,12)+"…":r.team1_name):"";
+    var t2Short=r.team2_name?(r.team2_name.length>12?r.team2_name.slice(0,12)+"…":r.team2_name):"";
+    h+='<tr><td style="font-family:var(--mono);font-size:11px">'+r.date+'</td>';
+    h+='<td style="font-size:11px">'+mIco(r.mode)+'</td>';
+    h+='<td style="font-size:11px">'+r.map+'</td>';
+    h+='<td style="font-size:10px;font-weight:600;color:var(--t2)">'+t1Short+'</td>';
+    h+='<td style="font-size:11px">'+bIconSm(r.brawler1)+bIconSm(r.brawler2)+bIconSm(r.brawler3)+'</td>';
+    h+='<td style="font-size:10px;color:var(--t3)">vs</td>';
+    h+='<td style="font-size:11px">'+bIconSm(r.enemy1)+bIconSm(r.enemy2)+bIconSm(r.enemy3)+'</td>';
+    h+='<td style="font-family:var(--mono);font-size:11px;font-weight:700">'+(r.set_score||"-")+'</td>';
+    h+='<td>'+resultBadge(r.result)+'</td></tr>';}
   h+='</tbody></table></div></div></div>';
   el.innerHTML=h;
 }
@@ -1807,8 +1877,13 @@ var _mapFilter="";
 function pgMaps(el,s,data){
   var h='<div class="fade">';
   h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><span style="font-size:24px;font-weight:900">MAP STATS</span></div>';
+  // Dynamic mode pills from actual data
+  var mapModes={};for(var mmi=0;mmi<data.length;mmi++){if(data[mmi].mode)mapModes[data[mmi].mode]=1;}
+  var mapModeList=[];for(var mmk in mapModes)mapModeList.push(mmk);
+  var mmOrder={};for(var mmo=0;mmo<MODES.length;mmo++)mmOrder[MODES[mmo]]=mmo;
+  mapModeList.sort(function(a,b){var oa=mmOrder[a]!=null?mmOrder[a]:100,ob=mmOrder[b]!=null?mmOrder[b]:100;return oa!==ob?oa-ob:a.localeCompare(b);});
   h+='<div class="pills" id="mapModePills"><div class="pill '+(!_mapFilter?"white":"")+'" onclick="setMapMF(\'\')">ALL</div>';
-  for(var mi=0;mi<MODES.length;mi++){var mo=MODES[mi];h+='<div class="pill '+(_mapFilter===mo?"green":"")+'" onclick="setMapMF(\''+mo+'\')">'+mIco(mo)+mo.toUpperCase()+'</div>';}
+  for(var mi=0;mi<mapModeList.length;mi++){var mo=mapModeList[mi];h+='<div class="pill '+(_mapFilter===mo?"green":"")+'" onclick="setMapMF(\''+mo+'\')">'+mIco(mo)+mo.toUpperCase()+'</div>';}
   h+='</div>';
   h+='<div style="display:grid;grid-template-columns:300px 1fr;gap:20px">';
   h+='<div><input class="search-box" id="mapSearch" placeholder="Search map..." oninput="filterMapList()" style="max-width:100%">';
